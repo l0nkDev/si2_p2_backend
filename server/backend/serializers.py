@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from server.backend.models import Student, Teacher, User
+from server.backend.models import Assistance, Class, Participation, Score, Student, Subject, Teacher, User
     
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -14,7 +14,44 @@ class TeacherSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'login', 'password', 'access_token', 'role', 'student', 'teacher']      
+        fields = ['id', 'login', 'password', 'access_token', 'role', 'student', 'teacher']   
+        
+class ScoreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Score
+        fields = ['id', 'score', 'trimester', 'student', 'subject', '_class']    
+        
+class AssistanceSerializer(serializers.ModelSerializer):
+    student = StudentSerializer()
+    
+    class Meta:
+        model = Assistance
+        fields = ['id', 'date', 'status', '_class', 'student', 'subject']   
+        
+class ParticipationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Participation
+        fields = ['id', 'description', 'score', '_class', 'student', 'subject', 'date']   
+        
+class ClassSerializerSimple(serializers.ModelSerializer):
+    class Meta:
+        model = Class
+        fields = ['id', 'grade', 'parallel', 'stage', 'year']    
+        
+class ClassSerializer(serializers.ModelSerializer):
+    students = StudentSerializer(many=True)
+    
+    class Meta:
+        model = Class
+        fields = ['id', 'grade', 'parallel', 'stage', 'year', 'students']    
+        
+class SubjectSerializer(serializers.ModelSerializer):
+    classes = ClassSerializerSimple(many=True)
+    
+    class Meta:
+        model = Subject
+        fields = ['id', 'title', 'teacher', 'classes']     
+
 
 
 '''
