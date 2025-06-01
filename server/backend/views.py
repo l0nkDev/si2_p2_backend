@@ -1,9 +1,11 @@
-from server.backend.models import Assistance, Class, Participation, Score, Student, Subject, Teacher, User
-from server.backend.serializers import AssistanceSerializer, ParticipationSerializer, ScoreSerializer, StudentSerializer, SubjectSerializer, TeacherSerializer, UserSerializer
+import zoneinfo
+from server.backend.models import Assistance, Class, ClassSession, Participation, Score, Student, Subject, SubjectArea, Teacher, User
+from server.backend.serializers import AssistanceSerializer, AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, ParticipationSerializer, ScoreSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer
 from server.backend.permissions import IsLoggedIn, IsAdmin, IsStudent, IsTeacher
-from rest_framework import generics, permissions, mixins
+from rest_framework import generics, mixins
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.utils import timezone
 from secrets import token_urlsafe
 
 class StudentList(mixins.ListModelMixin,
@@ -111,31 +113,69 @@ class CreateClassesForYear(APIView):
                     c.year = request.data['year']
                     c.save()
         return Response(status=200)  
+
+class AssignClassSubject(APIView):
+    permission_classes = [IsAdmin]
+    def post(self, request, pk, format=None):
+        c = Class.objects.get(pk=request.data['class'])
+        c.subjects.add(Subject.objects.get(pk=pk))
+        c.save()
+        return Response(status=200)  
     
 class ScoreList(generics.ListCreateAPIView):
     #permission_classes = [IsAdmin]
     queryset = Score.objects.all()
     serializer_class = ScoreSerializer
     
+class ClassList(generics.ListCreateAPIView):
+    #permission_classes = [IsAdmin]
+    queryset = Class.objects.all().order_by('stage', 'grade', 'parallel')
+    serializer_class = ClassSerializerSimple
+    
 class ScoreDetail(generics.RetrieveUpdateDestroyAPIView):
     #permission_classes = [IsAdmin]
     queryset = Score.objects.all()
     serializer_class = ScoreSerializer  
+    
+class SubjectAreaList(generics.ListAPIView):
+    permission_classes = [IsAdmin]
+    queryset = SubjectArea.objects.all().order_by('title')
+    serializer_class = SubjectAreaListSerializer
+    
+class SubjectList(generics.ListCreateAPIView):
+    #permission_classes = [IsAdmin]
+    queryset = Subject.objects.all().order_by('title')
+    serializer_class = SubjectSerializer
+    
+class SubjectDetail(generics.RetrieveUpdateDestroyAPIView):
+    #permission_classes = [IsAdmin]
+    queryset = Subject.objects.all()
+    serializer_class = SubjectSerializer  
       
 class AssistanceList(generics.ListCreateAPIView):
     #permission_classes = [IsAdmin]
     queryset = Assistance.objects.all()
-    serializer_class = AssistanceSerializer
+    serializer_class = AssistanceSerializerUpdate
     
 class AssistanceDetail(generics.RetrieveUpdateDestroyAPIView):
     #permission_classes = [IsAdmin]
     queryset = Assistance.objects.all()
-    serializer_class = AssistanceSerializer
+    serializer_class = AssistanceSerializerUpdate
       
 class ParticipationList(generics.ListCreateAPIView):
     #permission_classes = [IsAdmin]
     queryset = Participation.objects.all()
     serializer_class = ParticipationSerializer
+    
+class ClassSessionDetail(generics.RetrieveUpdateDestroyAPIView):
+    #permission_classes = [IsAdmin]
+    queryset = ClassSession.objects.all()
+    serializer_class = ClassSessionSerializer
+      
+class ClassSessionList(generics.ListCreateAPIView):
+    #permission_classes = [IsAdmin]
+    queryset = ClassSession.objects.all()
+    serializer_class = ClassSessionSerializer
     
 class ParticipationDetail(generics.RetrieveUpdateDestroyAPIView):
     #permission_classes = [IsAdmin]
@@ -143,13 +183,181 @@ class ParticipationDetail(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ParticipationSerializer
 
 class TeachersClasses(APIView):
-    #permission_classes = [IsTeacher]
+    permission_classes = [IsTeacher]
     def get(self, request, format=None):
         year = None
         try: year = request.data['year']
         except: year = 2025
         subjects = Subject.objects.filter(teacher=User.objects.get(access_token=request.META['HTTP_AUTHORIZATION'].split()[1]).teacher)
         serializer = SubjectSerializer(data=subjects, many=True)
-        if serializer.is_valid():
-            ''
+        serializer.is_valid()
         return Response(serializer.data, status=200)
+
+class StudentsClasses(APIView):
+    permission_classes = [IsStudent]
+    def get(self, request, format=None):
+        student = User.objects.get(access_token=request.META['HTTP_AUTHORIZATION'].split()[1]).student
+        print(student)
+        year = None
+        try: year = request.data['year']
+        except: year = 2025
+        _class = Class.objects.get(year=year, students=student)
+        return Response(StudentClassSerializer(_class).data, status=200)
+        
+class ClassAssistance(APIView):
+    permission_classes = [IsTeacher]
+    def get(self, request, pk, _class, format=None):
+        students = Class.objects.get(pk=_class).students.order_by('lname', 'name')
+        serializer = StudentAssistanceSerializer(data=students, many=True)
+        serializer.is_valid()
+        students = serializer.data
+        for student in students:
+            assistances = Assistance.objects.filter(session__subject__id= pk, student__id = student['id'])
+            a = AssistanceSerializerSimple(data=assistances, many=True)
+            a.is_valid()
+            a = a.data
+            student['assistances'] = a
+        return Response(students, status=200)
+        
+class ClassAssistanceStudent(APIView):
+    permission_classes = [IsStudent]
+    def get(self, request, pk, _class, format=None):
+        students = Class.objects.get(pk=_class).students.order_by('lname', 'name')
+        serializer = StudentAssistanceSerializer(data=students, many=True)
+        serializer.is_valid()
+        students = serializer.data
+        for student in students:
+            assistances = Assistance.objects.filter(session__subject__id= pk, student__id = student['id'])
+            a = AssistanceSerializerSimple(data=assistances, many=True)
+            a.is_valid()
+            a = a.data
+            student['assistances'] = a
+        return Response(students, status=200)
+
+class AreaList(generics.ListCreateAPIView):
+    permission_classes = [IsAdmin]
+    queryset = SubjectArea.objects.all()
+    serializer_class = SubjectAreaSerializer
+    
+class TeachersSessions(APIView):
+    permission_classes = [IsTeacher]
+    def get(self, request, pk, _class, format=None):
+        sessions = ClassSession.objects.filter(_class__id=_class, subject__id=pk)
+        serializer = ClassSessionSerializer(data=sessions, many=True)
+        serializer.is_valid()
+        return Response(serializer.data, status=200)
+    
+class StudentsSessions(APIView):
+    permission_classes = [IsStudent]
+    def get(self, request, pk, _class, format=None):
+        sessions = ClassSession.objects.filter(_class__id=_class, subject__id=pk)
+        serializer = ClassSessionSerializer(data=sessions, many=True)
+        serializer.is_valid()
+        return Response(serializer.data, status=200)
+    
+class StudentSessionStatus(APIView):
+    permission_classes = [IsStudent]
+    def get(self, request, pk, _class, format=None):
+        print(timezone.now().today())
+        try: 
+            c = ClassSession.objects.get(subject=pk, _class=_class, date=timezone.now().today())
+            return Response({"id": c.id, "_class": c._class.id, "subject": c.subject.id, "status": c.status, "date": c.date}, status=200)
+        except:
+            return Response({"detail": "class hasn't started yet"}, 200)
+        
+    def post(self, request, pk, _class, format=None):
+        s = User.objects.get(access_token=request.META['HTTP_AUTHORIZATION'].split()[1]).student
+        c = ClassSession.objects.get(subject=pk, _class=_class, date=timezone.now().today())
+        try:
+            a = Assistance.objects.get(student=s, session=c)
+        except:
+            a = Assistance()
+            a.student = s
+            a.session = c
+        if c.status == 'S': a.status = 'present'
+        if c.status == 'E': a.status = 'missed'
+        if c.status == 'L': a.status = 'late'
+        a.save()
+        return Response(status=200)
+    
+    
+class TeacherSessionStatus(APIView):
+    permission_classes = [IsTeacher]
+    def get(self, request, pk, _class, format=None):
+        print(timezone.now().today())
+        try: 
+            c = ClassSession.objects.get(subject=pk, _class=_class, date=timezone.now().today())
+            return Response({"id": c.id, "_class": c._class.id, "subject": c.subject.id, "status": c.status, "date": c.date}, status=200)
+        except:
+            return Response({"detail": "class hasn't started yet"}, 200)
+        
+    def post(self, request, pk, _class, format=None):
+        print(timezone.now().today())
+        try: 
+            c = ClassSession.objects.get(subject=pk, _class=_class, date=timezone.now().today())
+            c.status = request.data['status']
+            c.save()
+            return Response({"id": c.id, "_class": c._class.id, "subject": c.subject.id, "status": c.status, "date": c.date}, status=200)
+        except:
+            c = ClassSession()
+            c._class = Class.objects.get(pk=_class)
+            c.subject = Subject.objects.get(pk=pk)
+            c.status = request.data['status']
+            c.date = timezone.now().today()
+            c.save()
+            return Response({"id": c.id, "_class": c._class.id, "subject": c.subject.id, "status": c.status, "date": c.date}, status=200)
+        
+class ClassParticipation(APIView):
+    permission_classes = [IsTeacher]
+    def get(self, request, pk, _class, format=None):
+        students = Class.objects.get(pk=_class).students.order_by('lname', 'name')
+        s = StudentSerializer(data=students, many=True)
+        s.is_valid()
+        students = s.data
+        for student in students:
+            participations = Participation.objects.filter(subject__id=pk, _class__id=_class, student__id=student['id'])
+            p = ParticipationSerializer(data=participations, many=True)
+            p.is_valid()
+            participations = p.data
+            student['participations'] = participations
+        return Response(students, status=200)
+    
+    def post(self, request, pk, _class, format=None):
+        participation = Participation()
+        participation.description = request.data["description"]
+        participation.score = request.data["score"]
+        participation.student = Student.objects.get(pk=request.data["student"])
+        participation._class =Class.objects.get(pk=_class)
+        participation.subject =Subject.objects.get(pk=pk)
+        participation.date = timezone.now().today()
+        participation.save()
+        serializer = ParticipationSerializer(data=participation)
+        serializer.is_valid()
+        return Response(serializer.data, status=200)
+    
+    def put(self, request, pk, _class, format=None):
+        participation = Participation.objects.get(pk=request.data['id'])
+        participation.description = request.data["description"]
+        participation.score = request.data["score"]
+        participation.save()
+        serializer = ParticipationSerializer(data=participation)
+        serializer.is_valid()
+        return Response(serializer.data, status=200)
+    
+    def patch(self, request, pk, _class, format=None):
+        participation = Participation.objects.get(pk=request.data['id'])
+        participation.delete()
+        return Response(status=200)
+
+class StudentParticipation(APIView):
+    permission_classes = [IsStudent]
+    def get(self, request, pk, _class, format=None):
+        student = User.objects.get(access_token=request.META['HTTP_AUTHORIZATION'].split()[1]).student
+        s = StudentSerializer(student)
+        student = s.data
+        participations = Participation.objects.filter(subject__id=pk, _class__id=_class, student__id=student['id'])
+        p = ParticipationSerializer(data=participations, many=True)
+        p.is_valid()
+        participations = p.data
+        student['participations'] = participations
+        return Response(student, status=200)
