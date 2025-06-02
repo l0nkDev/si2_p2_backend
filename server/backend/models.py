@@ -103,3 +103,9 @@ class User(models.Model):
     student = models.OneToOneField(Student, on_delete=models.CASCADE, null=True)
     teacher = models.OneToOneField(Teacher, on_delete=models.CASCADE, null=True)
     
+class fcm(models.Model):
+    user = models.ForeignKey(User, verbose_name="Usuario", on_delete=models.CASCADE)
+    token = models.TextField("Token", max_length=256)
+    class Meta:
+        unique_together = ('user', 'token')
+    

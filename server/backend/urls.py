@@ -20,6 +20,7 @@ urlpatterns = [
     path('admin/classes/<int:pk>/assign/', views.AssignClassSubject.as_view()),
     path('users/self/', views.UserSelf.as_view()),
     path('auth/login/', views.UserLogin.as_view()),
+    path('auth/logout/', views.UserLogout.as_view()),
     path('teacher/scores/', views.ScoreList.as_view()),
     path('teacher/scores/<int:pk>/', views.ScoreDetail.as_view()),
     path('teacher/assistance/', views.AssistanceList.as_view()),
@@ -41,6 +42,9 @@ urlpatterns = [
     
     path('teacher/subjects/<int:pk>/<int:_class>/scores/', views.ClassScores.as_view()),
     path('teacher/subjects/<int:pk>/<int:_class>/scores/targets/', views.ClassScoreTargets.as_view()),
+    path('student/subjects/<int:pk>/<int:_class>/scores/', views.StudentScores.as_view()),
+    path('student/subjects/<int:pk>/<int:_class>/scores/targets/', views.StudentScoreTargets.as_view()),
+    
     path('student/subjects/', views.StudentsClasses.as_view()),
     path('teacher/subjects/<int:pk>/<int:_class>/participation/', views.ClassAssistance.as_view()),
 ]
