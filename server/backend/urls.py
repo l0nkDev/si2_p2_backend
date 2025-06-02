@@ -27,14 +27,20 @@ urlpatterns = [
     path('teacher/participation/', views.ParticipationList.as_view()),
     path('teacher/participation/<int:pk>/', views.ParticipationDetail.as_view()),
     path('teacher/subjects/', views.TeachersClasses.as_view()),
+    
+    
     path('teacher/subjects/<int:pk>/<int:_class>/assistance/', views.ClassAssistance.as_view()),
     path('teacher/subjects/<int:pk>/<int:_class>/assistance/sessions/', views.TeachersSessions.as_view()),
     path('teacher/subjects/<int:pk>/<int:_class>/assistance/sessions/today/', views.TeacherSessionStatus.as_view()),
     path('student/subjects/<int:pk>/<int:_class>/assistance/', views.ClassAssistanceStudent.as_view()),
     path('student/subjects/<int:pk>/<int:_class>/assistance/sessions/', views.StudentsSessions.as_view()),
-    path('student/subjects/<int:pk>/<int:_class>/assistance/sessions/today', views.StudentSessionStatus.as_view()),
+    path('student/subjects/<int:pk>/<int:_class>/assistance/sessions/today/', views.StudentSessionStatus.as_view()),
+    
     path('teacher/subjects/<int:pk>/<int:_class>/participation/', views.ClassParticipation.as_view()),
     path('student/subjects/<int:pk>/<int:_class>/participation/', views.StudentParticipation.as_view()),
+    
+    path('teacher/subjects/<int:pk>/<int:_class>/scores/', views.ClassScores.as_view()),
+    path('teacher/subjects/<int:pk>/<int:_class>/scores/targets/', views.ClassScoreTargets.as_view()),
     path('student/subjects/', views.StudentsClasses.as_view()),
     path('teacher/subjects/<int:pk>/<int:_class>/participation/', views.ClassAssistance.as_view()),
 ]

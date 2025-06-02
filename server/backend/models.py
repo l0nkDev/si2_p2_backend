@@ -57,19 +57,23 @@ class ClassSession(models.Model):
     status = models.TextField('Estado', choices=Status.choices)
     class Meta:
         unique_together = ('_class', 'subject', 'date')
-
-class Score(models.Model):
+    
+class ScoreTarget(models.Model):
     class Trimester(models.IntegerChoices):
         t1 = 1, "1"
         t2 = 2, "2"
         t3 = 3, "3"
     subject = models.ForeignKey(Subject, verbose_name="Materia", on_delete=models.CASCADE)
-    student = models.ForeignKey(Student, verbose_name="Estudiante", on_delete=models.CASCADE)
     _class = models.ForeignKey(Class, verbose_name="Clase", on_delete=models.CASCADE)
-    score = models.IntegerField("Nota")
+    title = models.TextField("Título")
     trimester = models.IntegerField("Trimestre", choices=Trimester.choices)
+
+class Score(models.Model):
+    student = models.ForeignKey(Student, verbose_name="Estudiante", on_delete=models.CASCADE)
+    target = models.ForeignKey(ScoreTarget, verbose_name="Tarea", on_delete=models.CASCADE)
+    score = models.IntegerField("Nota")
     class Meta:
-        unique_together = ('subject', 'student', '_class', 'trimester')
+        unique_together = ('student', 'target')
     
 class Assistance(models.Model):
     class Status(models.TextChoices):

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from server.backend.models import Assistance, Class, ClassSession, Participation, Score, Student, Subject, SubjectArea, Teacher, User
+from server.backend.models import Assistance, Class, ClassSession, Participation, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User
     
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -19,7 +19,7 @@ class UserSerializer(serializers.ModelSerializer):
 class ScoreSerializer(serializers.ModelSerializer):
     class Meta:
         model = Score
-        fields = ['id', 'score', 'trimester', 'student', 'subject', '_class']    
+        fields = ['id', 'student', 'target', 'score']    
         
 class AssistanceSerializer(serializers.ModelSerializer):
     student = StudentSerializer()
@@ -102,29 +102,9 @@ class ClassSerializer(serializers.ModelSerializer):
 class ClassSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClassSession
-        fields = ['id', '_class', 'subject', 'date', 'status']          
-
-
-
-'''
-class OldStudentSerializer(serializers.Serializer):
-    name = serializers.CharField()
-    lname = serializers.CharField()
-    ci = serializers.IntegerField()
-    phone = serializers.IntegerField(required=False)
-    email = serializers.CharField(required=False)
-    rude = serializers.IntegerField()
-    
-    def create(self, validated_data):
-        return Student.objects.create(validated_data)
-    
-    def update(self, instance: Student, validated_data):
-        instance.name = validated_data.get('name', instance.name)
-        instance.lname = validated_data.get('lname', instance.name)
-        instance.ci = validated_data.get('ci', instance.ci)
-        instance.phone = validated_data.get('phone', instance.phone)
-        instance.email = validated_data.get('email', instance.email)
-        instance.rude = validated_data.get('rude', instance.rude)
-        instance.save()
-        return instance
-'''
+        fields = ['id', '_class', 'subject', 'date', 'status']        
+        
+class ScoreTargetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScoreTarget
+        fields = ['id', 'subject', '_class', 'title', 'trimester']   

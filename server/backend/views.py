@@ -1,6 +1,6 @@
 import zoneinfo
-from server.backend.models import Assistance, Class, ClassSession, Participation, Score, Student, Subject, SubjectArea, Teacher, User
-from server.backend.serializers import AssistanceSerializer, AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, ParticipationSerializer, ScoreSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer
+from server.backend.models import Assistance, Class, ClassSession, Participation, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User
+from server.backend.serializers import AssistanceSerializer, AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, ParticipationSerializer, ScoreSerializer, ScoreTargetSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer
 from server.backend.permissions import IsLoggedIn, IsAdmin, IsStudent, IsTeacher
 from rest_framework import generics, mixins
 from rest_framework.views import APIView
@@ -261,7 +261,8 @@ class StudentSessionStatus(APIView):
         print(timezone.now().today())
         try: 
             c = ClassSession.objects.get(subject=pk, _class=_class, date=timezone.now().today())
-            return Response({"id": c.id, "_class": c._class.id, "subject": c.subject.id, "status": c.status, "date": c.date}, status=200)
+            cs = ClassSessionSerializer(c)
+            return Response(cs.data, status=200)
         except:
             return Response({"detail": "class hasn't started yet"}, 200)
         
@@ -287,7 +288,8 @@ class TeacherSessionStatus(APIView):
         print(timezone.now().today())
         try: 
             c = ClassSession.objects.get(subject=pk, _class=_class, date=timezone.now().today())
-            return Response({"id": c.id, "_class": c._class.id, "subject": c.subject.id, "status": c.status, "date": c.date}, status=200)
+            cs = ClassSessionSerializer(c)
+            return Response(cs.data, status=200)
         except:
             return Response({"detail": "class hasn't started yet"}, 200)
         
@@ -297,7 +299,8 @@ class TeacherSessionStatus(APIView):
             c = ClassSession.objects.get(subject=pk, _class=_class, date=timezone.now().today())
             c.status = request.data['status']
             c.save()
-            return Response({"id": c.id, "_class": c._class.id, "subject": c.subject.id, "status": c.status, "date": c.date}, status=200)
+            cs = ClassSessionSerializer(c)
+            return Response(cs.data, status=200)
         except:
             c = ClassSession()
             c._class = Class.objects.get(pk=_class)
@@ -305,7 +308,8 @@ class TeacherSessionStatus(APIView):
             c.status = request.data['status']
             c.date = timezone.now().today()
             c.save()
-            return Response({"id": c.id, "_class": c._class.id, "subject": c.subject.id, "status": c.status, "date": c.date}, status=200)
+            cs = ClassSessionSerializer(c)
+            return Response(cs.data, status=200)
         
 class ClassParticipation(APIView):
     permission_classes = [IsTeacher]
@@ -315,7 +319,7 @@ class ClassParticipation(APIView):
         s.is_valid()
         students = s.data
         for student in students:
-            participations = Participation.objects.filter(subject__id=pk, _class__id=_class, student__id=student['id'])
+            participations = Participation.objects.filter(subject__id=pk, _class__id=_class, student__id=student['id']).order_by('id')
             p = ParticipationSerializer(data=participations, many=True)
             p.is_valid()
             participations = p.data
@@ -355,9 +359,45 @@ class StudentParticipation(APIView):
         student = User.objects.get(access_token=request.META['HTTP_AUTHORIZATION'].split()[1]).student
         s = StudentSerializer(student)
         student = s.data
-        participations = Participation.objects.filter(subject__id=pk, _class__id=_class, student__id=student['id'])
+        participations = Participation.objects.filter(subject__id=pk, _class__id=_class, student__id=student['id']).order_by('id')
         p = ParticipationSerializer(data=participations, many=True)
         p.is_valid()
         participations = p.data
         student['participations'] = participations
         return Response(student, status=200)
+    
+class ClassScoreTargets(APIView):
+    permission_classes= [IsTeacher]
+    def get(self, request, pk, _class, format=None):
+        targets = ScoreTarget.objects.filter(_class__id=_class, subject__id=pk)
+        s = ScoreTargetSerializer(data=targets, many=True)
+        s.is_valid()
+        targets = s.data
+        return Response(targets, status=200)
+    
+    def post(self, request, pk, _class, format=None):
+        target = ScoreTarget()
+        target.subject = Subject.objects.get(pk=pk)
+        target._class = Class.objects.get(pk=_class)
+        target.title = request.data['title']
+        target.trimester = request.data['trimester']
+        s = ScoreTargetSerializer(target)
+        target = s.data
+        return Response(target, status=200)
+        
+    
+class ClassScores(APIView):
+    permission_classes= [IsTeacher]
+    def get(self, request, pk, _class, format=None):
+        students = Class.objects.get(pk=_class).students.order_by('lname', 'name')
+        s = StudentSerializer(data=students, many=True)
+        s.is_valid()
+        students = s.data
+        for student in students:
+            targets = ScoreTarget.objects.filter(_class__id=_class, subject__id=pk)
+            scores = Score.objects.filter(student__id=student['id'], target__in=targets)
+            s = ScoreSerializer(data=scores, many=True)
+            s.is_valid()
+            scores = s.data
+            student['scores'] = scores
+        return Response(students, status=200)
