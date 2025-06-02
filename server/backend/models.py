@@ -108,4 +108,12 @@ class fcm(models.Model):
     token = models.TextField("Token", max_length=256)
     class Meta:
         unique_together = ('user', 'token')
+        
+class Log(models.Model):
+    user = models.TextField("Usuario")
+    role = models.TextField("Rol")
+    login = models.TextField("Login")
+    action = models.TextField("Acción")
+    ip = models.TextField("IP")
+    time = models.DateTimeField("Fecha y hora")
     

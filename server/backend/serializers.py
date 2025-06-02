@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from server.backend.models import Assistance, Class, ClassSession, Participation, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User, fcm
+from server.backend.models import Assistance, Class, ClassSession, Log, Participation, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User, fcm
     
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -113,3 +113,8 @@ class fcmSerializer(serializers.ModelSerializer):
     class Meta:
         model = fcm
         fields = ['id', 'user', 'token']   
+        
+class LogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Log
+        fields = ['id', 'user', 'role', 'login', 'action', 'ip', 'time']   

@@ -2,8 +2,8 @@ import json
 import zoneinfo
 
 import requests
-from server.backend.models import Assistance, Class, ClassSession, Participation, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User, fcm
-from server.backend.serializers import AssistanceSerializer, AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, ParticipationSerializer, ScoreSerializer, ScoreTargetSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer, fcmSerializer
+from server.backend.models import Log, Assistance, Class, ClassSession, Participation, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User, fcm
+from server.backend.serializers import AssistanceSerializer, AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, LogSerializer, ParticipationSerializer, ScoreSerializer, ScoreTargetSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer, fcmSerializer
 from server.backend.permissions import IsLoggedIn, IsAdmin, IsStudent, IsTeacher
 from rest_framework import generics, mixins
 from rest_framework.views import APIView
@@ -45,6 +45,37 @@ def send_fcm_notification(device_token, title, body):
         print('Notification sent!')
     else:
         print(f"Error sending notification: {response.status_code}, {response.text}")
+        
+def saveLog(request, action): 
+    log = Log()
+    user = User.objects.get(access_token=request.META['HTTP_AUTHORIZATION'].split()[1])
+    if user.role == 'S':
+        log.user = user.student.lname + " " + user.student.name
+    if user.role == 'T':
+        log.user = user.teacher.lname + " " + user.teacher.name
+    if user.role == 'A':
+        log.user = user.login
+    log.role = user.role
+    log.login = user.login
+    log.action = action
+    log.ip = request.META['REMOTE_ADDR']
+    log.time = timezone.now().today()
+    log.save()
+        
+def saveLogUser(request, action, user): 
+    log = Log()
+    if user.role == 'S':
+        log.user = user.student.lname + " " + user.student.name
+    if user.role == 'T':
+        log.user = user.teacher.lname + " " + user.teacher.name
+    if user.role == 'A':
+        log.user = user.login
+    log.role = user.role
+    log.login = user.login
+    log.action = action
+    log.ip = request.META['REMOTE_ADDR']
+    log.time = timezone.now().today()
+    log.save()
 
 class StudentList(mixins.ListModelMixin,
                   mixins.CreateModelMixin,
@@ -139,6 +170,7 @@ class UserLogin(APIView):
         except: 
             return Response(status=406)
         if user != None: 
+            saveLogUser(request, 'Inició sesión', user)
             return Response(UserSerializer(user).data)
         return Response(status=400)
     
@@ -155,7 +187,8 @@ class UserLogout(APIView):
         except: 
             return Response(status=406)
         if user != None: 
-            return Response(UserSerializer(user).data)
+            saveLog(request, 'Cerró sesión')
+            return Response(status=200)
         return Response(status=400)
 
 class CreateClassesForYear(APIView):
@@ -501,8 +534,7 @@ class StudentScoreTargets(APIView):
         s = ScoreTargetSerializer(data=targets, many=True)
         s.is_valid()
         targets = s.data
-        return Response(targets, status=200)
-        
+        return Response(targets, status=200) 
     
 class StudentScores(APIView):
     permission_classes= [IsStudent]
@@ -516,4 +548,15 @@ class StudentScores(APIView):
         s.is_valid()
         scores = s.data
         student['scores'] = scores
-        return Response(student, status=200)
+        return Response(student, status=200)    
+    
+class LogsList(APIView):
+    permission_classes= [IsAdmin]
+    def get(self, request, format=None):
+        try: page = int(request.query_params['page'])
+        except: page = 0
+        logs = Log.objects.all().order_by('-id')[(20*page):(20*page)+20]
+        s = LogSerializer(data=logs, many=True)
+        s.is_valid()
+        return Response(s.data, status=200)
+

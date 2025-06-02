@@ -18,6 +18,7 @@ urlpatterns = [
     path('admin/classes/create/', views.CreateClassesForYear.as_view()),
     path('admin/classes/', views.ClassList.as_view()),
     path('admin/classes/<int:pk>/assign/', views.AssignClassSubject.as_view()),
+    path('admin/logs/', views.LogsList.as_view()),
     path('users/self/', views.UserSelf.as_view()),
     path('auth/login/', views.UserLogin.as_view()),
     path('auth/logout/', views.UserLogout.as_view()),
