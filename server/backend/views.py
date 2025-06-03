@@ -1,9 +1,15 @@
+from cmath import sqrt
+from datetime import time
+import datetime
+import io
 import json
+from time import mktime
 import zoneinfo
 
 import requests
-from server.backend.models import Log, Assistance, Class, ClassSession, Participation, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User, fcm
-from server.backend.serializers import AssistanceSerializer, AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, LogSerializer, ParticipationSerializer, ScoreSerializer, ScoreTargetSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer, fcmSerializer
+from reportehelper import reportes
+from server.backend.models import Log, Assistance, Class, ClassSession, Participation, Report, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User, fcm
+from server.backend.serializers import AssistanceSerializer, AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, LogSerializer, ParticipationSerializer, ReportSerializer, ScoreSerializer, ScoreTargetSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer, fcmSerializer
 from server.backend.permissions import IsLoggedIn, IsAdmin, IsStudent, IsTeacher
 from rest_framework import generics, mixins
 from rest_framework.views import APIView
@@ -11,6 +17,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from google.oauth2 import service_account
 import google.auth.transport.requests
+from django.core.management import call_command
 from secrets import token_urlsafe
 
 service_account_file = './si2-p1-mobile-firebase-adminsdk-fbsvc-c39d103571.json'
@@ -76,6 +83,37 @@ def saveLogUser(request, action, user):
     log.ip = request.META['REMOTE_ADDR']
     log.time = timezone.now().today()
     log.save()
+    
+def subjectPrediction(subject, _class, student):
+    targets = ScoreTarget.objects.filter(_class=_class, subject=subject)
+    scores = Score.objects.filter(student=student, target__in=targets)
+    s = ScoreSerializer(data=scores, many=True)
+    s.is_valid()
+    scores = s.data
+    sumx = 0
+    sumy = 0
+    sumxy = 0
+    sumx2 = 0
+    sumy2 = 0
+    n = len(scores)
+    for score in scores:
+        x = (mktime(ScoreTarget.objects.get(pk=score['target']).date.timetuple())/86400) - 19500
+        y = score['score']
+        print(x)
+        print(y)
+        sumy += y
+        sumx += x
+        sumxy += x*y
+        sumx2 += pow(x, 2)
+        sumy2 += pow(y, 2)
+    b = ((sumx*sumy)-(n*sumxy))/(-(n*sumx2)+pow(sumx, 2))
+    a = (sumy-(b*sumx))/n
+    print(a)
+    print(b)
+        
+    
+    return Response(student, status=200) 
+    
 
 class StudentList(mixins.ListModelMixin,
                   mixins.CreateModelMixin,
@@ -215,6 +253,7 @@ class AssignClassSubject(APIView):
         c = Class.objects.get(pk=request.data['class'])
         c.subjects.add(Subject.objects.get(pk=pk))
         c.save()
+        saveLog(request, 'Asignó ' + Subject.objects.get(pk=pk).title + ' a ' + c.stage + str(c.grade) + c.parallel)
         return Response(status=200)  
     
 class ScoreList(generics.ListCreateAPIView):
@@ -372,6 +411,7 @@ class StudentSessionStatus(APIView):
         if c.status == 'E': a.status = 'missed'
         if c.status == 'L': a.status = 'late'
         a.save()
+        saveLog(request, 'Marcó asistencia en ' + a.session.subject.title)
         return Response(status=200)
     
     
@@ -393,15 +433,17 @@ class TeacherSessionStatus(APIView):
             c.status = request.data['status']
             c.save()
             cs = ClassSessionSerializer(c)
+            saveLog(request, 'Actualizó su clase de ' + c.subject.title)
             return Response(cs.data, status=200)
         except:
             c = ClassSession()
             c._class = Class.objects.get(pk=_class)
             c.subject = Subject.objects.get(pk=pk)
             c.status = request.data['status']
-            c.date = timezone.now().today()
+            c.date = timezone.now().today().date()
             c.save()
             cs = ClassSessionSerializer(c)
+            saveLog(request, 'Actualizó su clase de ' + c.subject.title)
             return Response(cs.data, status=200)
         
 class ClassParticipation(APIView):
@@ -430,6 +472,7 @@ class ClassParticipation(APIView):
         participation.save()
         serializer = ParticipationSerializer(data=participation)
         serializer.is_valid()
+        saveLog(request, 'Creó una participación de ' + participation.student.lname + ' ' + participation.student.name + ' en la materia ' + participation.subject.title)
         return Response(serializer.data, status=200)
     
     def put(self, request, pk, _class, format=None):
@@ -439,10 +482,12 @@ class ClassParticipation(APIView):
         participation.save()
         serializer = ParticipationSerializer(data=participation)
         serializer.is_valid()
+        saveLog(request, 'Actualizó una participación de ' + participation.student.lname + ' ' + participation.student.name + ' en la materia ' + participation.subject.title)
         return Response(serializer.data, status=200)
     
     def patch(self, request, pk, _class, format=None):
         participation = Participation.objects.get(pk=request.data['id'])
+        saveLog(request, 'Eliminó una participación de ' + participation.student.lname + ' ' + participation.student.name + ' en la materia ' + participation.subject.title)
         participation.delete()
         return Response(status=200)
 
@@ -474,8 +519,10 @@ class ClassScoreTargets(APIView):
         target._class = Class.objects.get(pk=_class)
         target.title = request.data['title']
         target.trimester = request.data['trimester']
+        target.date = timezone.now().today()
         target.save()
         s = ScoreTargetSerializer(target)
+        saveLog(request, 'Creó una entrada de notas de la materia ' + target.subject.title)
         target = s.data
         return Response(target, status=200)
     
@@ -484,11 +531,13 @@ class ClassScoreTargets(APIView):
         target.title = request.data['title']
         target.save()
         s = ScoreTargetSerializer(target)
+        saveLog(request, 'Actualizó una entrada de notas de la materia ' + target.subject.title)
         target = s.data
         return Response(target, status=200)
     
     def patch(self, request, pk, _class, format=None):
         target = ScoreTarget.objects.get(pk=request.data['id'])
+        saveLog(request, 'Eliminó una entrada de notas de la materia ' + target.subject.title)
         target.delete()
         return Response(status=200)
         
@@ -525,6 +574,7 @@ class ClassScores(APIView):
         fcms = fs.data
         for f in fcms:
             send_fcm_notification(f['token'], 'Notas de ' + score.target.subject.title + ' actualizadas!', 'Sacaste ' + str(score.score) + ' en ' + score.target.title)
+        saveLog(request, 'Actualizó las notas de la materia ' + score.target.title)
         return Response(s.data, status=200)
     
 class StudentScoreTargets(APIView):
@@ -558,5 +608,93 @@ class LogsList(APIView):
         logs = Log.objects.all().order_by('-id')[(20*page):(20*page)+20]
         s = LogSerializer(data=logs, many=True)
         s.is_valid()
-        return Response(s.data, status=200)
-
+        return Response(s.data, status=200) 
+    
+class BackupsList(APIView):
+    permission_classes= [IsAdmin]
+    def get(self, request, format=None):
+        l = ['test']
+        with io.StringIO() as f:
+            call_command('listbackups', stdout=f)
+            l = f.getvalue().splitlines()
+        response = []
+        for line in l:
+            t = line.split()
+            if len(t) == 3:
+                response.append({"name": t[0], "date": t[1], "time": t[2]})
+        response.reverse()
+        return Response(response ,status=200)
+    
+    def post(self, request, format=None):
+        saveLog(request, 'Generó una copia de seguridad')
+        call_command('dbbackup')
+        return Response(status=200)
+    
+    def put(self, request, format=None):
+        call_command('dbrestore', '--noinput', '-i' + request.data['name'])
+        saveLog(request, 'Restauró una copia de seguridad')
+        return Response(status=200)
+    
+class ReporteShow(APIView):
+    def get(self, request, format=None):
+        if (request.query_params['type'] == 'logs'):
+            role = request.query_params['role']
+            since = request.query_params['since']
+            until = request.query_params['until']
+            l = Log.objects.all()
+            if since == 'any' and until != 'any':
+                l = l.filter(time__lte=until)
+            if since != 'any' and until == 'any':
+                l = l.filter(time__gte=since)
+            if since != 'any' and until != 'any':
+                l = l.filter(time__range=[since, until])
+            if role != 'any':
+                l = l.filter(role=role)
+            s = LogSerializer(data=l, many=True)
+            s.is_valid()
+            s = s.data
+            r = []
+            for e in s:
+                r.append([e['id'], e['user'], e['login'], e['role'], e['action'], e['ip'], e['time']])
+            return reportes('BITÁCORA', r, ['id', 'Usuario', 'Login', 'Rol', 'Acción', 'IP', 'Fecha y hora'], request.query_params['f'])
+        
+        if (request.query_params['type'] == 'teachers'):
+            t = Teacher.objects.all()
+            s = TeacherSerializer(data=t, many=True)
+            s.is_valid()
+            t = s.data
+            r = []
+            for e in t:
+                r.append([e['id'], e['lname'], e['name'], e['ci'], e['phone'], e['email']])
+            return reportes('DOCENTES', r, ['id', 'Apellido(s)', 'Nombre(s)', 'Cédula de identidad', 'Teléfono', 'Correo electrónico'], request.query_params['f'])
+        
+        if (request.query_params['type'] == 'students'):
+            t = Student.objects.all()
+            s = StudentSerializer(data=t, many=True)
+            s.is_valid()
+            t = s.data
+            r = []
+            for e in t:
+                r.append([e['id'], e['lname'], e['name'], e['ci'], e['phone'], e['email'], e['rude']])
+            return reportes('ESTUDIANTES', r, ['id', 'Apellido(s)', 'Nombre(s)', 'Cédula de identidad', 'Teléfono', 'Correo electrónico', 'RUDE'], request.query_params['f'])
+            
+        return Response(status=400)
+    
+class ReporteList(APIView):
+    permission_classes = [IsAdmin]
+    def get(self, request, format=None):
+        subjectPrediction( Subject.objects.get(pk=1), Class.objects.get(pk=253), Student.objects.get(pk=2))
+        r = Report.objects.all().order_by('-time')
+        s = ReportSerializer(data=r, many=True)
+        s.is_valid()
+        r = s.data
+        return Response(r, status=200)
+    
+    def post(self, request, format=None):
+        r = Report()
+        r.params = request.data['params']
+        r.title = request.data['title']
+        r.time = timezone.now().today()
+        r.save()
+        saveLog(request, 'Generó un reporte de ' + r.title)
+        return Response(status=200)

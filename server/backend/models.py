@@ -30,7 +30,7 @@ class SubjectArea(models.Model):
     
 class Subject(models.Model):
     title = models.TextField("Titulo")
-    teacher = models.ForeignKey(Teacher, verbose_name="Docente", on_delete=models.CASCADE, null=True)
+    teacher = models.ForeignKey(Teacher, verbose_name="Docente", related_name='subjects', on_delete=models.CASCADE, null=True)
     area = models.ForeignKey(SubjectArea, verbose_name="Area", related_name='subjects', on_delete=models.CASCADE)
     def __str__(self):
         return self.title
@@ -67,6 +67,7 @@ class ScoreTarget(models.Model):
     _class = models.ForeignKey(Class, verbose_name="Clase", on_delete=models.CASCADE)
     title = models.TextField("Título")
     trimester = models.IntegerField("Trimestre", choices=Trimester.choices)
+    date = models.DateField("Fecha")
 
 class Score(models.Model):
     student = models.ForeignKey(Student, verbose_name="Estudiante", on_delete=models.CASCADE)
@@ -115,5 +116,10 @@ class Log(models.Model):
     login = models.TextField("Login")
     action = models.TextField("Acción")
     ip = models.TextField("IP")
+    time = models.DateTimeField("Fecha y hora")
+    
+class Report(models.Model):
+    params = models.TextField("Parametros")
+    title = models.TextField("Título")
     time = models.DateTimeField("Fecha y hora")
     
