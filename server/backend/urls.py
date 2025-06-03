@@ -64,6 +64,8 @@ urlpatterns = [
     
     path('student/subjects/', views.StudentsClasses.as_view()),
     path('teacher/subjects/<int:pk>/<int:_class>/participation/', views.ClassAssistance.as_view()),
+    path('students/<int:pk>/', views.StudentProfile.as_view()),
+    path('admin/auto/', views.automation.as_view()),
 ]
 
 urlpatterns = format_suffix_patterns(urlpatterns)

@@ -50,7 +50,7 @@ class ClassSerializerSimple(serializers.ModelSerializer):
         fields = ['id', 'grade', 'parallel', 'stage', 'year']     
         
 class SubjectSerializer(serializers.ModelSerializer):
-    classes = ClassSerializerSimple(many=True)
+    classes = ClassSerializerSimple(many=True, read_only=True)
     class Meta:
         model = Subject
         fields = ['id', 'title', 'teacher', 'area', 'classes']   

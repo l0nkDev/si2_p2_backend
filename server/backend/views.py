@@ -1,15 +1,13 @@
-from cmath import sqrt
-from datetime import time
 import datetime
 import io
 import json
+import random
 from time import mktime
-import zoneinfo
 
 import requests
-from reportehelper import reportes
+from reportehelper import reportes, names, lnames
 from server.backend.models import Log, Assistance, Class, ClassSession, Participation, Report, Score, ScoreTarget, Student, Subject, SubjectArea, Teacher, User, fcm
-from server.backend.serializers import AssistanceSerializer, AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, LogSerializer, ParticipationSerializer, ReportSerializer, ScoreSerializer, ScoreTargetSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer, fcmSerializer
+from server.backend.serializers import AssistanceSerializerSimple, AssistanceSerializerUpdate, ClassSerializerSimple, ClassSessionSerializer, LogSerializer, ParticipationSerializer, ReportSerializer, ScoreSerializer, ScoreTargetSerializer, StudentAssistanceSerializer, StudentClassSerializer, StudentSerializer, SubjectAreaListSerializer, SubjectAreaSerializer, SubjectSerializer, SubjectSerializerSimple, TeacherSerializer, UserSerializer, fcmSerializer
 from server.backend.permissions import IsLoggedIn, IsAdmin, IsStudent, IsTeacher
 from rest_framework import generics, mixins
 from rest_framework.views import APIView
@@ -90,29 +88,26 @@ def subjectPrediction(subject, _class, student):
     s = ScoreSerializer(data=scores, many=True)
     s.is_valid()
     scores = s.data
-    sumx = 0
-    sumy = 0
-    sumxy = 0
-    sumx2 = 0
-    sumy2 = 0
+    sumx, sumy, sumxy, sumx2, sumy2 = [0, 0, 0, 0, 0]
     n = len(scores)
     for score in scores:
         x = (mktime(ScoreTarget.objects.get(pk=score['target']).date.timetuple())/86400) - 19500
         y = score['score']
-        print(x)
-        print(y)
         sumy += y
         sumx += x
         sumxy += x*y
         sumx2 += pow(x, 2)
         sumy2 += pow(y, 2)
-    b = ((sumx*sumy)-(n*sumxy))/(-(n*sumx2)+pow(sumx, 2))
-    a = (sumy-(b*sumx))/n
-    print(a)
-    print(b)
-        
-    
-    return Response(student, status=200) 
+    if sumy > 0:
+        b = ((sumx*sumy)-(n*sumxy))/(-(n*sumx2)+pow(sumx, 2))
+        a = (sumy-(b*sumx))/n
+        x = (datetime.datetime(2025, 7, 31, 0, 0).timestamp()/86400) - 19500
+        res = a+(b*x)
+        avg = sumy/n
+        if res > 100: res = 100
+        if res < 0: res = 0
+        return {"average": round(avg, 2), "prediction": round(res, 2), "A": a, "B": b}
+    return {"average": 0, "prediction": 0, "A": 0, "B": 0}
     
 
 class StudentList(mixins.ListModelMixin,
@@ -146,7 +141,8 @@ class StudentDetail(generics.RetrieveUpdateDestroyAPIView):
 class TeacherList(mixins.ListModelMixin,
                   mixins.CreateModelMixin,
                   generics.GenericAPIView):
-    queryset = Teacher.objects.all()
+    permission_classes = [IsAdmin]
+    queryset = Teacher.objects.all().order_by('lname', 'name')
     serializer_class = TeacherSerializer
     
     def get(self, request, *args, **kwargs):
@@ -277,12 +273,12 @@ class SubjectAreaList(generics.ListAPIView):
     serializer_class = SubjectAreaListSerializer
     
 class SubjectList(generics.ListCreateAPIView):
-    #permission_classes = [IsAdmin]
+    permission_classes = [IsAdmin]
     queryset = Subject.objects.all().order_by('title')
     serializer_class = SubjectSerializer
     
 class SubjectDetail(generics.RetrieveUpdateDestroyAPIView):
-    #permission_classes = [IsAdmin]
+    permission_classes = [IsAdmin]
     queryset = Subject.objects.all()
     serializer_class = SubjectSerializer  
       
@@ -312,7 +308,7 @@ class ClassSessionList(generics.ListCreateAPIView):
     serializer_class = ClassSessionSerializer
     
 class ParticipationDetail(generics.RetrieveUpdateDestroyAPIView):
-    #permission_classes = [IsAdmin]
+    permission_classes = [IsTeacher]
     queryset = Participation.objects.all()
     serializer_class = ParticipationSerializer
 
@@ -325,7 +321,17 @@ class TeachersClasses(APIView):
         subjects = Subject.objects.filter(teacher=User.objects.get(access_token=request.META['HTTP_AUTHORIZATION'].split()[1]).teacher)
         serializer = SubjectSerializer(data=subjects, many=True)
         serializer.is_valid()
-        return Response(serializer.data, status=200)
+        subs = serializer.data
+        for sub in subs:
+            for cl in sub['classes']:
+                stu = Class.objects.get(pk=cl['id']).students
+                ss = StudentSerializer(data=stu, many=True)
+                ss.is_valid()
+                students = ss.data
+                for student in students:
+                    student['scores'] = subjectPrediction(Subject.objects.get(pk=sub['id']), Class.objects.get(pk=cl['id']), Student.objects.get(pk=student['id']))
+                cl['students'] = students
+        return Response(subs, status=200)
 
 class StudentsClasses(APIView):
     permission_classes = [IsStudent]
@@ -336,7 +342,10 @@ class StudentsClasses(APIView):
         try: year = request.data['year']
         except: year = 2025
         _class = Class.objects.get(year=year, students=student)
-        return Response(StudentClassSerializer(_class).data, status=200)
+        cl = StudentClassSerializer(_class).data
+        for c in cl['subjects']:
+            c['scores'] = subjectPrediction(Subject.objects.get(pk=c['id']), _class, student)
+        return Response(cl, status=200)
         
 class ClassAssistance(APIView):
     permission_classes = [IsTeacher]
@@ -635,6 +644,18 @@ class BackupsList(APIView):
         saveLog(request, 'Restauró una copia de seguridad')
         return Response(status=200)
     
+class StudentProfile(APIView): 
+    def get(self, request, pk, format=None):
+        student = Student.objects.get(pk=pk)
+        st = StudentSerializer(student).data
+        _class = Class.objects.get(year=2025, students=student)
+        cl = StudentClassSerializer(_class).data
+        for c in cl['subjects']:
+            c['scores'] = subjectPrediction(Subject.objects.get(pk=c['id']), _class, student)
+        st['classes'] = cl
+        return Response(st, status=200)
+        
+    
 class ReporteShow(APIView):
     def get(self, request, format=None):
         if (request.query_params['type'] == 'logs'):
@@ -697,4 +718,124 @@ class ReporteList(APIView):
         r.time = timezone.now().today()
         r.save()
         saveLog(request, 'Generó un reporte de ' + r.title)
+        return Response(status=200)
+    
+def createTeacher(name, lname, phone, email, ci):
+    t = Teacher()
+    t.name = name
+    t.lname = lname
+    t.phone = phone
+    t.email = email
+    t.ci = ci
+    t.save()
+    user = User()
+    user.access_token = token_urlsafe()
+    user.login = t.email
+    user.password = t.ci
+    user.role = 'T'
+    user.teacher = t
+    user.save()
+    
+def createStudent(name, lname, phone, email, ci, rude):
+    t = Student()
+    t.name = name
+    t.lname = lname
+    t.phone = phone
+    t.email = email
+    t.ci = ci
+    t.rude = rude
+    t.save()
+    user = User()
+    user.access_token = token_urlsafe()
+    user.login = t.email
+    user.password = t.ci
+    user.role = 'S'
+    user.student = t
+    user.save()
+    return t
+
+def genStudents():
+    for i in range(1080):
+        n = random.choice(names)
+        ln = random.choice(lnames)
+        r = random.randint(100, 999)
+        e = n.lower() + '.' + ln.lower() + str(r) + '@gmail.com'
+        ci = random.randint(1000000, 9999999)
+        p = random.randint(1000000, 9999999)
+        rude = random.randint(1000000, 9999999)
+        t = createStudent(n, ln, p, e, ci, rude)
+        c = Class.objects.get(pk=(253+(i%36)))
+        c.students.add(t)
+        c.save()
+        
+def genTeachers():
+    for i in range(36):
+        n = random.choice(names)
+        ln = random.choice(lnames)
+        r = random.randint(100, 999)
+        e = n.lower() + '.' + ln.lower() + str(r) + '@gmail.com'
+        ci = random.randint(1000000, 9999999)
+        p = random.randint(1000000, 9999999)
+        createTeacher(n, ln, p, e, ci)
+        
+t1dates = ['2024-12-04', '2024-12-11', '2024-12-18', '2024-12-25', '2025-01-01', '2025-01-08', '2025-01-15', '2025-01-22', '2025-01-29', '2025-02-05', '2025-02-12', '2025-02-19']
+t2dates = ['2025-02-26', '2025-03-05', '2025-03-12', '2025-03-19', '2025-03-26', '2025-04-02', '2025-04-09', '2025-04-16', '2025-04-23', '2025-04-30', '2025-05-07', '2025-05-14']
+t3dates = ['2025-05-21', '2025-05-29']
+
+def genScores(st, students):
+    for student in students:
+        sc = Score()
+        sc.score = random.randint(60, 100)
+        sc.student = Student.objects.get(pk=student['id'])
+        sc.target = st
+        sc.save()
+    
+        
+def genScoreTargets():
+    c = Class.objects.get(stage='P', grade=1, parallel='A')
+    s = c.subjects
+    st = c.students
+    ss = SubjectSerializerSimple(data=s, many=True)
+    sts = StudentSerializer(data=st, many=True)
+    ss.is_valid()
+    sts.is_valid()
+    subjects = ss.data
+    students = sts.data
+    for subject in subjects:
+        cnt = 1
+        for date in t1dates:
+            st = ScoreTarget()
+            st.subject = Subject.objects.get(pk=subject['id'])
+            st._class = c
+            st.title = 'S' + str(cnt)
+            cnt += 1
+            st.date = date
+            st.trimester = 1
+            st.save()
+            genScores(st, students)
+        for date in t2dates:
+            st = ScoreTarget()
+            st.subject = Subject.objects.get(pk=subject['id'])
+            st._class = c
+            st.title = 'S' + str(cnt)
+            cnt += 1
+            st.date = date
+            st.trimester = 2
+            st.save()
+            genScores(st, students)
+        for date in t3dates:
+            st = ScoreTarget()
+            st.subject = Subject.objects.get(pk=subject['id'])
+            st._class = c
+            st.title = 'S' + str(cnt)
+            cnt += 1
+            st.date = date
+            st.trimester = 3
+            st.save()
+            genScores(st, students)
+                
+
+class automation(APIView):
+    def get(self, request, format=None): 
+        #genScoreTargets()
         return Response(status=200)
