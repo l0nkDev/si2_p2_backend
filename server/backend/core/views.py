@@ -202,3 +202,14 @@ class StudentProfile(APIView):
             c['scores'] = subjectPrediction(Subject.objects.get(pk=c['id']), _class, student)
         st['classes'] = cl
         return Response(st, status=200)
+    
+
+class AssignUserClass(APIView):
+    permission_classes = [IsAdmin]
+    def post(self, request, pk, format=None):
+        c = Class.objects.get(pk=request.data['class'])
+        s = Student.objects.get(pk=request.data['student'])
+        s.classes.clear()
+        s.classes.add(c)
+        s.save()
+        return Response(status=200)

@@ -7,9 +7,13 @@ import google.auth.transport.requests
 import requests
 
 from server.backend.admin.models import Log
-from server.backend.core.models import User
+from server.backend.assistance.models import Assistance, ClassSession
+from server.backend.assistance.serializers import AssistanceSerializer
+from server.backend.core.models import Class, Student, Subject, User
 from server.backend.grades.models import Score, ScoreTarget
 from server.backend.grades.serializers import ScoreSerializer
+from server.backend.participations.models import Participation
+from server.backend.participations.serializers import ParticipationSerializer
 
 service_account_file = './si2-p1-mobile-firebase-adminsdk-fbsvc-c39d103571.json'
 credentials = service_account.Credentials.from_service_account_file(service_account_file, scopes=['https://www.googleapis.com/auth/cloud-platform'])
@@ -75,13 +79,23 @@ def saveLogUser(request, action, user):
     log.time = timezone.now().today()
     log.save()
     
-def subjectPrediction(subject, _class, student):
+def subjectPrediction(subject: Subject, _class: Class, student: Student):
     targets = ScoreTarget.objects.filter(_class=_class, subject=subject)
     scores = Score.objects.filter(student=student, target__in=targets)
     s = ScoreSerializer(data=scores, many=True)
     s.is_valid()
     scores = s.data
-    sumx, sumy, sumxy, sumx2, sumy2 = [0, 0, 0, 0, 0]
+    sessions = ClassSession.objects.filter(_class=_class, subject=subject)
+    sesscount = sessions.count()
+    attendances = Assistance.objects.filter(student=student, session__in=sessions)
+    a = AssistanceSerializer(data=attendances, many=True)
+    a.is_valid()
+    attendances = a.data
+    participations = Participation.objects.filter(subject=subject, _class=_class, student=student)
+    p = ParticipationSerializer(data=participations, many=True)
+    p.is_valid()
+    participations = p.data
+    sumx, sumy, sumxy, sumx2, sumy2, ac = [0, 0, 0, 0, 0, 0]
     n = len(scores)
     for score in scores:
         x = (mktime(ScoreTarget.objects.get(pk=score['target']).date.timetuple())/86400) - 19500
@@ -91,11 +105,25 @@ def subjectPrediction(subject, _class, student):
         sumxy += x*y
         sumx2 += pow(x, 2)
         sumy2 += pow(y, 2)
+    for participation in participations:
+        x = (mktime(Participation.objects.get(pk=participation['id']).date.timetuple())/86400) - 19500
+        y = participation['score']
+        sumy += y
+        sumx += x
+        sumxy += x*y
+        sumx2 += pow(x, 2)
+        sumy2 += pow(y, 2)
+    if sesscount > 0:
+        for attendance in attendances:
+            if attendance['status'] == 'present': ac += 1
+            if attendance['status'] == 'late': ac += 0.5
     if sumy > 0:
         b = ((sumx*sumy)-(n*sumxy))/(-(n*sumx2)+pow(sumx, 2))
         a = (sumy-(b*sumx))/n
-        x = (datetime.datetime(2025, 7, 31, 0, 0).timestamp()/86400) - 19500
+        x = (datetime.datetime(2025, 8, 7, 0, 0).timestamp()/86400) - 19500
         res = a+(b*x)
+        if sesscount > 0:
+            res += -5+10*(ac/sesscount)
         avg = sumy/n
         if res > 100: res = 100
         if res < 0: res = 0

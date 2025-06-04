@@ -11,6 +11,7 @@ import server.backend.assistance.views as assistance
 urlpatterns = [
     path('admin/students/', core.StudentList.as_view()),
     path('admin/students/<int:pk>/', core.StudentDetail.as_view()),
+    path('admin/students/<int:pk>/assign/', core.AssignUserClass.as_view()),
     
     path('admin/teachers/', core.TeacherList.as_view()),
     path('admin/teachers/<int:pk>/', core.TeacherDetail.as_view()),
