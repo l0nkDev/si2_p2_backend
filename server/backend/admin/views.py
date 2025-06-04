@@ -5,8 +5,8 @@ from rest_framework.response import Response
 from reportehelper import reportes
 from server.backend.admin.models import Log, Report
 from server.backend.admin.serializers import LogSerializer, ReportSerializer
-from server.backend.core.models import Class, Student, Subject, Teacher
-from server.backend.core.serializers import StudentSerializer, TeacherSerializer
+from server.backend.core.models import Class, Student, Subject, Teacher, User
+from server.backend.core.serializers import StudentSerializer, TeacherSerializer, UserSerializer
 from server.backend.permissions import IsAdmin
 from si2p2utils import saveLog, subjectPrediction
 from django.core.management import call_command
@@ -89,6 +89,16 @@ class ReporteShow(APIView):
             for e in t:
                 r.append([e['id'], e['lname'], e['name'], e['ci'], e['phone'], e['email'], e['rude']])
             return reportes('ESTUDIANTES', r, ['id', 'Apellido(s)', 'Nombre(s)', 'Cédula de identidad', 'Teléfono', 'Correo electrónico', 'RUDE'], request.query_params['f'])
+        
+        if (request.query_params['type'] == 'users'):
+            u = User.objects.all()
+            s = UserSerializer(data=u, many=True)
+            s.is_valid()
+            u = s.data
+            r = []
+            for e in u:
+                r.append([e['id'], e['login'], e['role']])
+            return reportes('USUARIOS', r, ['id', 'Login', 'Rol'], request.query_params['f'])
             
         return Response(status=400)
     
