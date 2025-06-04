@@ -17,6 +17,7 @@ urlpatterns = [
     path('admin/teachers/<int:pk>/', core.TeacherDetail.as_view()),
     
     path('admin/users/', core.UserList.as_view()),
+    path('admin/users/new/', core.CreateUser.as_view()),
     path('admin/users/<int:pk>/', core.UserDetail.as_view()),
     
     path('admin/subjectareas/', core.AreaList.as_view()),

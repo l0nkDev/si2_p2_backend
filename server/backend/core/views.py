@@ -106,6 +106,17 @@ class UserLogin(APIView):
             return Response(UserSerializer(user).data)
         return Response(status=400)
     
+class CreateUser(APIView):
+    permission_classes = [IsAdmin]
+    def post(self, request, format=None):
+        u = User()
+        u.role = 'A'
+        u.login = request.data['login']
+        u.password = request.data['password']
+        u.access_token = token_urlsafe()
+        u.save()
+        return Response(status=200)
+    
 class UserLogout(APIView):
     def post(self, request, format=None):
         try: 

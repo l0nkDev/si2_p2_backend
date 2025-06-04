@@ -13,9 +13,10 @@ class TeacherSerializer(serializers.ModelSerializer):
         
 class UserSerializer(serializers.ModelSerializer):
     access_token = serializers.CharField(read_only=True)
+    role = serializers.CharField(read_only=True)
     class Meta:
         model = User
-        fields = ['id', 'login', 'password', 'access_token', 'role', 'student', 'teacher']    
+        fields = ['id', 'login', 'password', 'access_token', 'role', 'student', 'teacher']  
         
 class ClassSerializerSimple(serializers.ModelSerializer):
     class Meta:
