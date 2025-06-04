@@ -1,5 +1,5 @@
 from rest_framework import permissions
-from server.backend.views import User
+from server.backend.core.models import User
 
 class IsLoggedIn(permissions.BasePermission):
     def has_permission(self, request, view):
